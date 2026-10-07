@@ -21,8 +21,20 @@ def main():
 
         path = parts[1]
 
-        if path == "/":
+        if path.startswith("/echo/"):
+            body = path[len("/echo/"):]
+
+            response = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        elif path == "/":
             response = "HTTP/1.1 200 OK\r\n\r\n"
+
         else:
             response = "HTTP/1.1 404 Not Found\r\n\r\n"
 
