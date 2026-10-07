@@ -1,4 +1,4 @@
-import socket  # noqa: F401
+import socket
 
 
 def main():
@@ -32,6 +32,24 @@ def main():
                 f"{body}"
             )
 
+        elif path == "/user-agent":
+            headers = request.split("\r\n")[1:]
+
+            user_agent = ""
+
+            for header in headers:
+                if header.lower().startswith("user-agent:"):
+                    user_agent = header.split(":", 1)[1].strip()
+                    break
+
+            response = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                f"Content-Length: {len(user_agent)}\r\n"
+                "\r\n"
+                f"{user_agent}"
+            )
+
         elif path == "/":
             response = "HTTP/1.1 200 OK\r\n\r\n"
 
@@ -41,6 +59,7 @@ def main():
         client.sendall(response.encode())
 
         client.close()
+
 
 if __name__ == "__main__":
     main()
