@@ -7,11 +7,17 @@ import os
 def handle_client(client, directory):
     request = client.recv(1024).decode()
 
+    while "\r\n\r\n" not in request:
+        request += client.recv(1024).decode()
+
     request_line = request.split("\r\n")[0]
+
     parts = request_line.split()
+
+    method = parts[0]
     path = parts[1]
 
-    if path.startswith("/echo/"):
+    if path.startswith("/echo/") and method == "GET":
         body = path[len("/echo/"):]
 
         response = (
@@ -22,7 +28,7 @@ def handle_client(client, directory):
             f"{body}"
         ).encode()
 
-    elif path == "/user-agent":
+    elif path == "/user-agent" and method == "GET":
         headers = request.split("\r\n")[1:]
 
         user_agent = ""
@@ -40,34 +46,68 @@ def handle_client(client, directory):
             f"{user_agent}"
         ).encode()
 
+    elif path == "/" and method == "GET":
+        response = b"HTTP/1.1 200 OK\r\n\r\n"
+
     elif path.startswith("/files/"):
+        filename = path[len("/files/"):]
+
         if directory is None:
             response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+
         else:
-            filename = path[len("/files/"):]
             file_path = os.path.join(directory, filename)
 
-            if os.path.isfile(file_path):
-                with open(file_path, "rb") as file:
-                    body = file.read()
+            if method == "GET":
 
-                response = (
-                    b"HTTP/1.1 200 OK\r\n"
-                    b"Content-Type: application/octet-stream\r\n"
-                    + f"Content-Length: {len(body)}\r\n".encode()
-                    + b"\r\n"
-                    + body
-                )
+                if os.path.isfile(file_path):
+                    with open(file_path, "rb") as file:
+                        body = file.read()
+
+                    response = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Content-Type: application/octet-stream\r\n"
+                        + f"Content-Length: {len(body)}\r\n".encode()
+                        + b"\r\n"
+                        + body
+                    )
+
+                else:
+                    response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+
+            elif method == "POST":
+
+                headers = request.split("\r\n")
+
+                content_length = 0
+
+                for header in headers:
+                    if header.lower().startswith("content-length:"):
+                        content_length = int(
+                            header.split(":", 1)[1].strip()
+                        )
+                        break
+
+                body_start = request.find("\r\n\r\n") + 4
+
+                body = request[body_start:]
+
+                while len(body.encode()) < content_length:
+                    body += client.recv(1024).decode()
+
+                with open(file_path, "w") as file:
+                    file.write(body[:content_length])
+
+                response = b"HTTP/1.1 201 Created\r\n\r\n"
+
             else:
                 response = b"HTTP/1.1 404 Not Found\r\n\r\n"
-
-    elif path == "/":
-        response = b"HTTP/1.1 200 OK\r\n\r\n"
 
     else:
         response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
     client.sendall(response)
+
     client.close()
 
 
