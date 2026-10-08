@@ -1,14 +1,14 @@
 import socket
 import threading
+import sys
+import os
 
 
-def handle_client(client):
+def handle_client(client, directory):
     request = client.recv(1024).decode()
 
     request_line = request.split("\r\n")[0]
-
     parts = request_line.split()
-
     path = parts[1]
 
     if path.startswith("/echo/"):
@@ -20,7 +20,7 @@ def handle_client(client):
             f"Content-Length: {len(body)}\r\n"
             "\r\n"
             f"{body}"
-        )
+        ).encode()
 
     elif path == "/user-agent":
         headers = request.split("\r\n")[1:]
@@ -38,20 +38,39 @@ def handle_client(client):
             f"Content-Length: {len(user_agent)}\r\n"
             "\r\n"
             f"{user_agent}"
-        )
+        ).encode()
+
+    elif path.startswith("/files/"):
+        filename = path[len("/files/"):]
+        file_path = os.path.join(directory, filename)
+
+        if os.path.isfile(file_path):
+            with open(file_path, "rb") as file:
+                body = file.read()
+
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: application/octet-stream\r\n"
+                f"Content-Length: {len(body)}\r\n".encode()
+                + b"\r\n"
+                + body
+            )
+        else:
+            response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
     elif path == "/":
-        response = "HTTP/1.1 200 OK\r\n\r\n"
+        response = b"HTTP/1.1 200 OK\r\n\r\n"
 
     else:
-        response = "HTTP/1.1 404 Not Found\r\n\r\n"
+        response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
-    client.sendall(response.encode())
-
+    client.sendall(response)
     client.close()
 
 
 def main():
+    directory = sys.argv[2]
+
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -65,7 +84,7 @@ def main():
 
         thread = threading.Thread(
             target=handle_client,
-            args=(client,)
+            args=(client, directory)
         )
 
         thread.start()
