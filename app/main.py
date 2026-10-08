@@ -6,137 +6,159 @@ import gzip
 
 
 def handle_client(client, directory):
-    request = client.recv(1024).decode()
+    try:
+        while True:
+            request = client.recv(1024).decode()
 
-    while "\r\n\r\n" not in request:
-        request += client.recv(1024).decode()
-
-    request_line = request.split("\r\n")[0]
-
-    parts = request_line.split()
-
-    method = parts[0]
-    path = parts[1]
-
-    headers = request.split("\r\n")[1:]
-
-    accept_encoding = ""
-
-    for header in headers:
-        if header.lower().startswith("accept-encoding:"):
-            accept_encoding = header.split(":", 1)[1].strip()
-            break
-
-    if path.startswith("/echo/") and method == "GET":
-        body = path[len("/echo/"):].encode()
-
-        encodings = [
-            encoding.strip()
-            for encoding in accept_encoding.split(",")
-        ]
-
-        if "gzip" in encodings:
-            body = gzip.compress(body)
-
-            response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: text/plain\r\n"
-                b"Content-Encoding: gzip\r\n"
-                + f"Content-Length: {len(body)}\r\n".encode()
-                + b"\r\n"
-                + body
-            )
-
-        else:
-            response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: text/plain\r\n"
-                + f"Content-Length: {len(body)}\r\n".encode()
-                + b"\r\n"
-                + body
-            )
-
-    elif path == "/user-agent" and method == "GET":
-        headers = request.split("\r\n")[1:]
-
-        user_agent = ""
-
-        for header in headers:
-            if header.lower().startswith("user-agent:"):
-                user_agent = header.split(":", 1)[1].strip()
+            if not request:
                 break
 
-        response = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            f"Content-Length: {len(user_agent)}\r\n"
-            "\r\n"
-            f"{user_agent}"
-        ).encode()
+            while "\r\n\r\n" not in request:
+                data = client.recv(1024).decode()
 
-    elif path == "/" and method == "GET":
-        response = b"HTTP/1.1 200 OK\r\n\r\n"
+                if not data:
+                    client.close()
+                    return
 
-    elif path.startswith("/files/"):
-        filename = path[len("/files/"):]
+                request += data
 
-        if directory is None:
-            response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+            request_line = request.split("\r\n")[0]
+            parts = request_line.split()
 
-        else:
-            file_path = os.path.join(directory, filename)
+            if len(parts) < 2:
+                break
 
-            if method == "GET":
+            method = parts[0]
+            path = parts[1]
 
-                if os.path.isfile(file_path):
-                    with open(file_path, "rb") as file:
-                        body = file.read()
+            header_section, _, body = request.partition("\r\n\r\n")
+            headers = header_section.split("\r\n")[1:]
+
+            accept_encoding = ""
+
+            for header in headers:
+                if header.lower().startswith("accept-encoding:"):
+                    accept_encoding = header.split(":", 1)[1].strip()
+                    break
+
+            content_length = 0
+
+            for header in headers:
+                if header.lower().startswith("content-length:"):
+                    content_length = int(
+                        header.split(":", 1)[1].strip()
+                    )
+                    break
+
+            body_bytes = body.encode()
+
+            while len(body_bytes) < content_length:
+                data = client.recv(1024)
+
+                if not data:
+                    return
+
+                body_bytes += data
+
+            if path.startswith("/echo/") and method == "GET":
+                body = path[len("/echo/"):].encode()
+
+                encodings = [
+                    encoding.strip()
+                    for encoding in accept_encoding.split(",")
+                ]
+
+                if "gzip" in encodings:
+                    body = gzip.compress(body)
 
                     response = (
                         b"HTTP/1.1 200 OK\r\n"
-                        b"Content-Type: application/octet-stream\r\n"
+                        b"Content-Type: text/plain\r\n"
+                        b"Content-Encoding: gzip\r\n"
                         + f"Content-Length: {len(body)}\r\n".encode()
                         + b"\r\n"
                         + body
                     )
 
                 else:
-                    response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+                    response = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Content-Type: text/plain\r\n"
+                        + f"Content-Length: {len(body)}\r\n".encode()
+                        + b"\r\n"
+                        + body
+                    )
 
-            elif method == "POST":
-
-                headers = request.split("\r\n")
-
-                content_length = 0
+            elif path == "/user-agent" and method == "GET":
+                user_agent = ""
 
                 for header in headers:
-                    if header.lower().startswith("content-length:"):
-                        content_length = int(
-                            header.split(":", 1)[1].strip()
-                        )
+                    if header.lower().startswith("user-agent:"):
+                        user_agent = header.split(":", 1)[1].strip()
                         break
 
-                body_start = request.find("\r\n\r\n") + 4
+                body = user_agent.encode()
 
-                body = request[body_start:]
+                response = (
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Content-Type: text/plain\r\n"
+                    + f"Content-Length: {len(body)}\r\n".encode()
+                    + b"\r\n"
+                    + body
+                )
 
-                while len(body.encode()) < content_length:
-                    body += client.recv(1024).decode()
+            elif path == "/" and method == "GET":
+                response = b"HTTP/1.1 200 OK\r\n\r\n"
 
-                with open(file_path, "w") as file:
-                    file.write(body[:content_length])
+            elif path.startswith("/files/"):
+                filename = path[len("/files/"):]
 
-                response = b"HTTP/1.1 201 Created\r\n\r\n"
+                if directory is None:
+                    response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+
+                else:
+                    file_path = os.path.join(directory, filename)
+
+                    if method == "GET":
+                        if os.path.isfile(file_path):
+                            with open(file_path, "rb") as file:
+                                body = file.read()
+
+                            response = (
+                                b"HTTP/1.1 200 OK\r\n"
+                                b"Content-Type: application/octet-stream\r\n"
+                                + f"Content-Length: {len(body)}\r\n".encode()
+                                + b"\r\n"
+                                + body
+                            )
+
+                        else:
+                            response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+
+                    elif method == "POST":
+                        with open(file_path, "wb") as file:
+                            file.write(body_bytes[:content_length])
+
+                        response = b"HTTP/1.1 201 Created\r\n\r\n"
+
+                    else:
+                        response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
             else:
                 response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
-    else:
-        response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+            client.sendall(response)
 
-    client.sendall(response)
+            connection_close = any(
+                header.lower().strip() == "connection: close"
+                for header in headers
+            )
 
-    client.close()
+            if connection_close:
+                break
+
+    finally:
+        client.close()
 
 
 def main():
