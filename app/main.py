@@ -147,12 +147,19 @@ def handle_client(client, directory):
             else:
                 response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
-            client.sendall(response)
-
             connection_close = any(
                 header.lower().strip() == "connection: close"
                 for header in headers
             )
+
+            if connection_close:
+                response = response.replace(
+                    b"\r\n\r\n",
+                    b"\r\nConnection: close\r\n\r\n",
+                    1
+                )
+
+            client.sendall(response)
 
             if connection_close:
                 break
