@@ -2,6 +2,7 @@ import socket
 import threading
 import sys
 import os
+import gzip
 
 
 def handle_client(client, directory):
@@ -17,16 +18,38 @@ def handle_client(client, directory):
     method = parts[0]
     path = parts[1]
 
-    if path.startswith("/echo/") and method == "GET":
-        body = path[len("/echo/"):]
+    headers = request.split("\r\n")[1:]
 
-        response = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            f"Content-Length: {len(body)}\r\n"
-            "\r\n"
-            f"{body}"
-        ).encode()
+    accept_encoding = ""
+
+    for header in headers:
+        if header.lower().startswith("accept-encoding:"):
+            accept_encoding = header.split(":", 1)[1].strip()
+            break
+
+    if path.startswith("/echo/") and method == "GET":
+        body = path[len("/echo/"):].encode()
+
+        if "gzip" in accept_encoding.split():
+            body = gzip.compress(body)
+
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/plain\r\n"
+                b"Content-Encoding: gzip\r\n"
+                + f"Content-Length: {len(body)}\r\n".encode()
+                + b"\r\n"
+                + body
+            )
+
+        else:
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/plain\r\n"
+                + f"Content-Length: {len(body)}\r\n".encode()
+                + b"\r\n"
+                + body
+            )
 
     elif path == "/user-agent" and method == "GET":
         headers = request.split("\r\n")[1:]
