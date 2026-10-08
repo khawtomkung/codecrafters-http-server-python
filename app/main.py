@@ -36,14 +36,16 @@ def handle_client(client, directory):
         ]
 
         if "gzip" in encodings:
-                response = (
-                    b"HTTP/1.1 200 OK\r\n"
-                    b"Content-Type: text/plain\r\n"
-                    b"Content-Encoding: gzip\r\n"
-                    + f"Content-Length: {len(body)}\r\n".encode()
-                    + b"\r\n"
-                    + body
-                )
+            body = gzip.compress(body)
+
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/plain\r\n"
+                b"Content-Encoding: gzip\r\n"
+                + f"Content-Length: {len(body)}\r\n".encode()
+                + b"\r\n"
+                + body
+            )
 
         else:
             response = (
