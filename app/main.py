@@ -51,7 +51,7 @@ def handle_client(client, directory):
             response = (
                 b"HTTP/1.1 200 OK\r\n"
                 b"Content-Type: application/octet-stream\r\n"
-                f"Content-Length: {len(body)}\r\n".encode()
+                + f"Content-Length: {len(body)}\r\n".encode()
                 + b"\r\n"
                 + body
             )
