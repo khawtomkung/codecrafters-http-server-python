@@ -30,17 +30,20 @@ def handle_client(client, directory):
     if path.startswith("/echo/") and method == "GET":
         body = path[len("/echo/"):].encode()
 
-        if "gzip" in accept_encoding.split():
-            body = gzip.compress(body)
+        encodings = [
+            encoding.strip()
+            for encoding in accept_encoding.split(",")
+        ]
 
-            response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: text/plain\r\n"
-                b"Content-Encoding: gzip\r\n"
-                + f"Content-Length: {len(body)}\r\n".encode()
-                + b"\r\n"
-                + body
-            )
+        if "gzip" in encodings:
+                response = (
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Content-Type: text/plain\r\n"
+                    b"Content-Encoding: gzip\r\n"
+                    + f"Content-Length: {len(body)}\r\n".encode()
+                    + b"\r\n"
+                    + body
+                )
 
         else:
             response = (
