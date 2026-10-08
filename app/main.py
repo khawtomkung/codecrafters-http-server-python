@@ -41,22 +41,25 @@ def handle_client(client, directory):
         ).encode()
 
     elif path.startswith("/files/"):
-        filename = path[len("/files/"):]
-        file_path = os.path.join(directory, filename)
-
-        if os.path.isfile(file_path):
-            with open(file_path, "rb") as file:
-                body = file.read()
-
-            response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: application/octet-stream\r\n"
-                + f"Content-Length: {len(body)}\r\n".encode()
-                + b"\r\n"
-                + body
-            )
-        else:
+        if directory is None:
             response = b"HTTP/1.1 404 Not Found\r\n\r\n"
+        else:
+            filename = path[len("/files/"):]
+            file_path = os.path.join(directory, filename)
+
+            if os.path.isfile(file_path):
+                with open(file_path, "rb") as file:
+                    body = file.read()
+
+                response = (
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Content-Type: application/octet-stream\r\n"
+                    + f"Content-Length: {len(body)}\r\n".encode()
+                    + b"\r\n"
+                    + body
+                )
+            else:
+                response = b"HTTP/1.1 404 Not Found\r\n\r\n"
 
     elif path == "/":
         response = b"HTTP/1.1 200 OK\r\n\r\n"
@@ -69,7 +72,10 @@ def handle_client(client, directory):
 
 
 def main():
-    directory = sys.argv[2]
+    directory = None
+
+    if len(sys.argv) >= 3 and sys.argv[1] == "--directory":
+        directory = sys.argv[2]
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
